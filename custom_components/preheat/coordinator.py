@@ -1049,6 +1049,9 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
                     search_start_date = datetime.combine(next_day.date(), datetime.min.time(), tzinfo=now.tzinfo)
 
         zone_next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
+        schedule_next_event = self.schedule_provider.get_next_session_start(now)
+        if not isinstance(schedule_next_event, datetime):
+            schedule_next_event = None
         
         house_next_event = None
         house_conf = 0.0
@@ -1059,7 +1062,12 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
         has_confident_house = (house_next_event is not None and house_conf >= 0.7)
         has_house_fallback = (house_next_event is not None and house_source == "fallback")
         
-        if has_confident_house or has_house_fallback:
+        # Explicit HA schedule is authoritative for the next comfort start.
+        # House / learned predictions are only fallbacks when no future
+        # schedule start is available.
+        if schedule_next_event is not None:
+            next_event = schedule_next_event
+        elif has_confident_house or has_house_fallback:
             next_event = house_next_event
         else:
             next_event = zone_next_event
@@ -1311,9 +1319,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             dur = pred["predicted_duration"]
 
             if evt:
+                # Expose the calculated future start immediately, not only
+                # once the start threshold has already been reached.
+                planned_start = evt - timedelta(minutes=dur)
+                if planned_start > now:
+                    start_time = planned_start
+
                 minutes_to_start = (evt - now).total_seconds() / 60.0
                 if minutes_to_start <= dur:
                     normal_start_triggered = True
+                    start_time = now
 
             if final_decision.session_end:
                 effective_departure = final_decision.session_end
