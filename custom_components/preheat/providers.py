@@ -57,48 +57,6 @@ class SessionEndProvider(ABC):
     """Abstract Base Class for Session End Providers."""
     
     @abstractmethod
-    def get_next_session_start(self, now: datetime | None = None) -> datetime | None:
-        """Return the next scheduled session start while the schedule is off.
-
-        Home Assistant schedule entities expose the next state transition via
-        the `next_event` attribute. When the schedule is OFF, that transition
-        is the next ON edge and therefore the next comfort-session start.
-        """
-        sched_entity = self._get_conf(CONF_SCHEDULE_ENTITY)
-        if not sched_entity:
-            return None
-
-        state = self.hass.states.get(sched_entity)
-        if not state or state.state != "off":
-            return None
-
-        next_event_raw = state.attributes.get("next_event")
-        if not next_event_raw:
-            return None
-
-        try:
-            next_event = dt_util.parse_datetime(str(next_event_raw))
-        except (TypeError, ValueError) as err:
-            _LOGGER.warning("Failed to parse schedule next_event '%s': %s", next_event_raw, err)
-            return None
-
-        if next_event is None:
-            return None
-
-        compare_now = now or dt_util.now()
-        try:
-            if next_event <= compare_now:
-                return None
-        except TypeError:
-            _LOGGER.warning(
-                "Cannot compare schedule next_event '%s' with current time '%s'",
-                next_event,
-                compare_now,
-            )
-            return None
-
-        return next_event
-
     def get_decision(self, context: dict[str, Any]) -> ProviderDecision:
         """Calculate and return the session end decision."""
         pass
@@ -154,6 +112,48 @@ class ScheduleProvider(SessionEndProvider):
             tau_hours=context["tau_hours"],
             config=opt_config
         )
+
+    def get_next_session_start(self, now: datetime | None = None) -> datetime | None:
+        """Return the next scheduled session start while the schedule is off.
+
+        Home Assistant schedule entities expose the next state transition via
+        the `next_event` attribute. When the schedule is OFF, that transition
+        is the next ON edge and therefore the next comfort-session start.
+        """
+        sched_entity = self._get_conf(CONF_SCHEDULE_ENTITY)
+        if not sched_entity:
+            return None
+
+        state = self.hass.states.get(sched_entity)
+        if not state or state.state != "off":
+            return None
+
+        next_event_raw = state.attributes.get("next_event")
+        if not next_event_raw:
+            return None
+
+        try:
+            next_event = dt_util.parse_datetime(str(next_event_raw))
+        except (TypeError, ValueError) as err:
+            _LOGGER.warning("Failed to parse schedule next_event '%s': %s", next_event_raw, err)
+            return None
+
+        if next_event is None:
+            return None
+
+        compare_now = now or dt_util.now()
+        try:
+            if next_event <= compare_now:
+                return None
+        except TypeError:
+            _LOGGER.warning(
+                "Cannot compare schedule next_event '%s' with current time '%s'",
+                next_event,
+                compare_now,
+            )
+            return None
+
+        return next_event
 
     def get_decision(self, context: dict[str, Any]) -> ProviderDecision:
         """
