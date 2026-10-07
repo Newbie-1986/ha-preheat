@@ -1050,6 +1050,8 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
 
         zone_next_event = self.planner.get_next_scheduled_event(search_start_date, allowed_weekdays=allowed_weekdays, blocked_dates=blocked_dates)
         schedule_next_event = self.schedule_provider.get_next_session_start(now)
+        if not isinstance(schedule_next_event, datetime):
+            schedule_next_event = None
         
         house_next_event = None
         house_conf = 0.0
