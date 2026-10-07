@@ -7,7 +7,7 @@ import pytest
 
 from custom_components.preheat.const import CONF_SCHEDULE_ENTITY, REASON_OFF
 from custom_components.preheat.coordinator import PreheatingCoordinator
-from custom_components.preheat.providers import ScheduleProvider
+from custom_components.preheat.providers import ProviderDecision, ScheduleProvider
 
 
 def _make_schedule_provider(state: str, next_event: str | None):
@@ -124,3 +124,53 @@ async def test_collect_context_prioritizes_upcoming_schedule_start():
         context = await coordinator._collect_context()
 
     assert context["next_event"] == schedule_start
+
+
+def test_future_preheat_start_is_exposed_before_trigger_time():
+    """The next-start sensor should get event - predicted duration in advance."""
+    now = datetime(2026, 10, 7, 20, 14, tzinfo=timezone.utc)
+    event = now + timedelta(hours=10)
+    predicted_duration = 30.0
+
+    hass = MagicMock()
+    entry = MagicMock()
+    entry.entry_id = "test"
+    entry.title = "Test"
+    entry.options = {}
+    entry.data = {}
+
+    with patch.object(PreheatingCoordinator, "_setup_listeners"):
+        coordinator = PreheatingCoordinator(hass, entry)
+
+    coordinator._window_open_detected = False
+    coordinator.hold_active = False
+    coordinator.enable_active = True
+    coordinator._get_conf = MagicMock(return_value=False)
+
+    final_decision = ProviderDecision(
+        should_stop=False,
+        session_end=None,
+        is_valid=True,
+        is_shadow=False,
+    )
+
+    (
+        should_start,
+        start_time,
+        _effective_departure,
+        blocked,
+        _blocked_reasons,
+    ) = coordinator._apply_blocks_and_suppression(
+        ctx={"next_event": event},
+        pred={"predicted_duration": predicted_duration},
+        now=now,
+        frost_override=False,
+        final_decision=final_decision,
+        is_optimal_stop_active=False,
+        should_start=False,
+        start_time=None,
+    )
+
+    assert should_start is False
+    assert blocked is False
+    assert start_time == event - timedelta(minutes=predicted_duration)
