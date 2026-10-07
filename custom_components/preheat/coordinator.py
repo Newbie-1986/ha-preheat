@@ -1317,9 +1317,16 @@ class PreheatingCoordinator(DataUpdateCoordinator[PreheatData]):
             dur = pred["predicted_duration"]
 
             if evt:
+                # Expose the calculated future start immediately, not only
+                # once the start threshold has already been reached.
+                planned_start = evt - timedelta(minutes=dur)
+                if planned_start > now:
+                    start_time = planned_start
+
                 minutes_to_start = (evt - now).total_seconds() / 60.0
                 if minutes_to_start <= dur:
                     normal_start_triggered = True
+                    start_time = now
 
             if final_decision.session_end:
                 effective_departure = final_decision.session_end
