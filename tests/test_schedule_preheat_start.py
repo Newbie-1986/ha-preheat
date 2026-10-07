@@ -1,5 +1,7 @@
 """Regression tests for upcoming preheat starts from HA schedule helpers."""
 
+# Covers Ecronika/ha-preheat#5.
+
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 
